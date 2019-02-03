@@ -1,0 +1,93 @@
+package server
+
+import (
+	"fmt"
+	"net"
+	"time"
+
+	"github.com/anmolbabu/tcp-server/pkg/utils"
+)
+
+const ConnectionType = "tcp"
+
+type ServerInterface interface {
+	HandleRequest(net.Listener) error
+	FetchBufferedData(bool) (utils.SizeStringSlice, error)
+}
+
+type Server struct {
+	ConnectionType string
+	HostName       string
+	Port           int
+}
+
+func (server Server) Create() (listener net.Listener, err error) {
+	listener, err = net.Listen(server.ConnectionType, fmt.Sprintf("%s:%d", server.HostName, server.Port))
+	if err != nil {
+		return listener, fmt.Errorf("failed to start fetcher server")
+	}
+	fmt.Printf("Listening on %s:%d\n", server.HostName, server.Port)
+	return
+}
+
+func (server Server) FetchBufferedData(isRemoveAfterRead bool, js *utils.JsonStore) (bData utils.SizeStringSlice, err error) {
+	return
+}
+func (p Server) HandleRequest(listener net.Listener) (err error) {
+	return
+}
+
+func (server Server) Cleanup(listener net.Listener) (err error) {
+	listener.Close()
+	return
+}
+
+func Init(fetcherServer Server, persisterServer Server, jsonStore *utils.JsonStore, fileName string) (err error) {
+	errCh := make(chan error)
+
+	fServer := NewFetcher(fetcherServer, jsonStore, fileName)
+	fetcherListener, err := fServer.Create()
+	if err != nil {
+		return fmt.Errorf("failed to initialise the fetcher server. Error %+v", err)
+	}
+	defer fServer.Cleanup(fetcherListener)
+	go func() {
+		for {
+			err = fServer.HandleRequest(fetcherListener)
+			if err != nil {
+				errCh <- fmt.Errorf("failed to handle request on fetcher server %+v. Error : %+v", fServer, err)
+				return
+			}
+		}
+	}()
+
+	pServer := NewPersister(persisterServer, jsonStore, fileName)
+	persisterListener, err := pServer.Create()
+	if err != nil {
+		return fmt.Errorf("failed to initialise the persister server. Error %+v", err)
+	}
+	defer pServer.Cleanup(persisterListener)
+	go func() {
+		for {
+			err = pServer.HandleRequest(persisterListener)
+			if err != nil {
+				errCh <- fmt.Errorf("failed to handle request on persister server %+v. Error : %+v", pServer, err)
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case err := <-errCh:
+			return err
+		case <-time.After(20 * time.Second):
+			err = pServer.SaveToFile()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return
+}
