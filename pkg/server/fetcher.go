@@ -66,7 +66,6 @@ func (fetcher Fetcher) HandleRequest(listener net.Listener) (err error) {
 
 	msg := make([]byte, 1024)
 	conn.Read(msg)
-	conn.Write([]byte(fmt.Sprintf("Message received %+v", strings.TrimSpace(string(msg)))))
 
 	msgs, err := fetcher.HandleMessage()
 	if err != nil {
@@ -74,6 +73,7 @@ func (fetcher Fetcher) HandleRequest(listener net.Listener) (err error) {
 		return err
 	}
 	fmt.Println(msgs)
+	conn.Write([]byte(fmt.Sprintf("Messages received as of now: %+v", strings.Join(msgs, " "))))
 
 	conn.Close()
 	return
