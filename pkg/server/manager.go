@@ -5,10 +5,9 @@ import (
 	"net"
 	"time"
 
+	"github.com/anmolbabu/tcp-server/pkg/config"
 	"github.com/anmolbabu/tcp-server/pkg/utils"
 )
-
-const ConnectionType = "tcp"
 
 type ServerInterface interface {
 	HandleRequest(net.Listener) error
@@ -19,6 +18,14 @@ type Server struct {
 	ConnectionType string
 	HostName       string
 	Port           int
+}
+
+func NewServer(cServer config.Server) Server {
+	return Server{
+		ConnectionType: cServer.Type,
+		HostName:       cServer.Hostname,
+		Port:           cServer.Port,
+	}
 }
 
 func (server Server) Create() (listener net.Listener, err error) {
@@ -42,10 +49,10 @@ func (server Server) Cleanup(listener net.Listener) (err error) {
 	return
 }
 
-func Init(fetcherServer Server, persisterServer Server, jsonStore *utils.JsonStore, fileName string) (err error) {
+func Init(conf config.Config, jsonStore *utils.JsonStore) (err error) {
 	errCh := make(chan error)
 
-	fServer := NewFetcher(fetcherServer, jsonStore, fileName)
+	fServer := NewFetcher(NewServer(conf.Fetcher), jsonStore, conf.DataFile)
 	fetcherListener, err := fServer.Create()
 	if err != nil {
 		return fmt.Errorf("failed to initialise the fetcher server. Error %+v", err)
@@ -61,7 +68,7 @@ func Init(fetcherServer Server, persisterServer Server, jsonStore *utils.JsonSto
 		}
 	}()
 
-	pServer := NewPersister(persisterServer, jsonStore, fileName)
+	pServer := NewPersister(NewServer(conf.Listener), jsonStore, conf.DataFile)
 	persisterListener, err := pServer.Create()
 	if err != nil {
 		return fmt.Errorf("failed to initialise the persister server. Error %+v", err)
@@ -81,7 +88,7 @@ func Init(fetcherServer Server, persisterServer Server, jsonStore *utils.JsonSto
 		select {
 		case err := <-errCh:
 			return err
-		case <-time.After(20 * time.Second):
+		case <-time.After(time.Duration(conf.FileDumpInterval) * time.Second):
 			err = pServer.SaveToFile()
 			if err != nil {
 				return err

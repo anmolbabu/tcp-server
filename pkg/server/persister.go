@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
-	"strings"
 
 	"github.com/anmolbabu/tcp-server/pkg/utils"
 )
@@ -75,31 +73,24 @@ func (p *Persister) HandleRequest(listener net.Listener) (err error) {
 }
 
 func (p *Persister) SaveToFile() error {
-	f, err := os.OpenFile(p.FileName, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to open file %s.Error %+v", p.FileName, err)
-	}
-
-	defer f.Close()
 
 	data := utils.NewSizeStringSlice()
 
-	_, err = p.JSONStore.Read(data, true)
+	_, err := p.JSONStore.Read(data, true)
 	if err != nil {
 		return fmt.Errorf("failed to read data in file. Error %+v", err)
 	}
 
 	if len(data.Data) > 0 {
-		if _, err = f.WriteString(strings.Join(data.Data, "\n")); err != nil {
-			if err != nil {
-				// Restore data to in memory buffer
-				p.JSONStore.WriteMany(data.Data)
-				fmt.Printf("failed to write data to file. Error %+v\n", err)
-				// Return error
-				return fmt.Errorf("failed to write data to file. Error %+v", err)
-			}
+		// Write to file and rollback to JSONstore if error
+		err = utils.WriteDataToFile(p.FileName, data.Data)
+		if err != nil {
+			// Restore data to in memory buffer
+			p.JSONStore.WriteMany(data.Data)
+			// Return error
+			return fmt.Errorf("failed to write data to file. Error %+v", err)
 		}
-		f.WriteString("\n")
 	}
+
 	return nil
 }
