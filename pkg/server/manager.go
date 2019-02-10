@@ -63,7 +63,6 @@ func Init(conf config.Config, jsonStore *utils.JsonStore) (err error) {
 			err = fServer.HandleRequest(fetcherListener)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to handle request on fetcher server %+v. Error : %+v", fServer, err)
-				return
 			}
 		}
 	}()
@@ -79,7 +78,6 @@ func Init(conf config.Config, jsonStore *utils.JsonStore) (err error) {
 			err = pServer.HandleRequest(persisterListener)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to handle request on persister server %+v. Error : %+v", pServer, err)
-				return
 			}
 		}
 	}()
@@ -87,7 +85,7 @@ func Init(conf config.Config, jsonStore *utils.JsonStore) (err error) {
 	for {
 		select {
 		case err := <-errCh:
-			return err
+			fmt.Println(err)
 		case <-time.After(time.Duration(conf.FileDumpInterval) * time.Second):
 			err = pServer.SaveToFile()
 			if err != nil {

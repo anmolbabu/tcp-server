@@ -35,7 +35,6 @@ func (fetcher Fetcher) HandleMessage() (msgs []string, err error) {
 		// Ignore file not found since that is a valid case on start and until the async file storage interval occurs
 		if err != nil && !os.IsNotExist(err) {
 			err = fmt.Errorf("failed fetching messages from file storage. error: %+v", err)
-			fmt.Println(err)
 			return
 		}
 	}()
@@ -45,7 +44,6 @@ func (fetcher Fetcher) HandleMessage() (msgs []string, err error) {
 		_, err = fetcher.JSONStore.Read(bufferedMsgs, false)
 		if err != nil {
 			err = fmt.Errorf("failed fetching messages from buffered store. error: %+v", err)
-			fmt.Println(err)
 			return
 		}
 	}()
@@ -60,8 +58,11 @@ func (fetcher Fetcher) HandleMessage() (msgs []string, err error) {
 
 func (fetcher Fetcher) HandleRequest(listener net.Listener) (err error) {
 	conn, err := listener.Accept()
+	defer conn.Close()
 	if err != nil {
-		return fmt.Errorf("failed accepting requests. Error: %+v", err)
+		err = fmt.Errorf("failed accepting requests. Error: %+v", err)
+		conn.Write([]byte(err.Error()))
+		return
 	}
 
 	msg := make([]byte, 1024)
@@ -69,13 +70,12 @@ func (fetcher Fetcher) HandleRequest(listener net.Listener) (err error) {
 
 	msgs, err := fetcher.HandleMessage()
 	if err != nil {
-		conn.Close()
+		conn.Write([]byte(err.Error()))
 		return err
 	}
 	fmt.Println(msgs)
 	conn.Write([]byte(fmt.Sprintf("Messages received as of now: %+v", strings.Join(msgs, " "))))
 
-	conn.Close()
 	return
 }
 

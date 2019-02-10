@@ -43,6 +43,7 @@ func (p *Persister) HandleMessage(msg []byte) (err error) {
 
 func (p *Persister) HandleRequest(listener net.Listener) (err error) {
 	conn, err := listener.Accept()
+	defer conn.Close()
 	if err != nil {
 		return fmt.Errorf("failed accepting requests. Error: %+v", err)
 	}
@@ -52,23 +53,26 @@ func (p *Persister) HandleRequest(listener net.Listener) (err error) {
 	jsonMsg := make(map[string]interface{})
 	err = decoder.Decode(&jsonMsg)
 	if err != nil {
-		return fmt.Errorf("failed to validate message as json. error: %+v", err)
+		err = fmt.Errorf("failed to validate message as json. error: %+v", err)
+		conn.Write([]byte(err.Error()))
+		return err
 	}
 
 	jsonString, err := json.Marshal(jsonMsg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal the passed message %+v. Error %+v", jsonMsg, err)
+		err = fmt.Errorf("failed to marshal the passed message %+v. Error %+v", jsonMsg, err)
+		conn.Write([]byte(err.Error()))
+		return err
 	}
 
 	conn.Write([]byte(fmt.Sprintf("Message received %+v", string(jsonString))))
 
 	err = p.HandleMessage(jsonString)
 	if err != nil {
-		conn.Close()
+		conn.Write([]byte(err.Error()))
 		return err
 	}
 
-	conn.Close()
 	return
 }
 
